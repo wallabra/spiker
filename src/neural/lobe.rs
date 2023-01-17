@@ -96,8 +96,6 @@ impl NeuralObject for Lobe {
 
         let mut outputs = vec![Amount::from_num(0.0); area];
 
-        outputs.copy_from_slice(&self.values[breadth..]);
-
         for (value_source, weights, strengths, thresholds, value_sink) in izip!(
             self.values_chunked(),
             self.weights.chunks(self.dims.1 * 3),
@@ -129,12 +127,14 @@ impl NeuralObject for Lobe {
             }
         }
 
-        (&mut self.values[breadth..]).copy_from_slice(&outputs);
-
         for (value, threshold) in izip!(&mut self.values, &self.thresholds) {
             if *value >= *threshold {
                 *value = Amount::from_num(0);
             }
+        }
+
+        for (into, from) in izip!(&mut self.values[breadth..], &outputs) {
+            *into += *from;
         }
 
         for value in &mut self.values {
