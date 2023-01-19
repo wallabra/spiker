@@ -1,8 +1,10 @@
 use super::base::NeuralObject;
 use crate::types::Amount;
 use itertools::izip;
-use std::slice::{Chunks, ChunksMut};
+use std::slice::{self, Chunks, ChunksMut};
 
+/// A rectangular cluster of spiking neurons.
+#[derive(Clone, Eq, PartialEq)]
 pub struct Lobe {
     dims: (usize, usize),
     values: Vec<Amount>,
@@ -13,6 +15,7 @@ pub struct Lobe {
 }
 
 impl Lobe {
+    /// Create a new Lobe from a pair of dimensions and a falloff value.
     pub fn new(breadth: usize, width: usize, falloff: Amount) -> Self {
         Lobe {
             dims: (width, breadth),
@@ -24,56 +27,113 @@ impl Lobe {
         }
     }
 
+    /// References a column of the Lobe's values.
     pub fn value_column_ref(&self, which: usize) -> &[Amount] {
         &self.values[which * self.dims.1..(which + 1) * self.dims.1]
     }
 
-    pub fn values_chunked(&self) -> Chunks<Amount> {
-        self.values.chunks(self.dims.1)
-    }
-
-    pub fn values_chunked_mut(&mut self) -> ChunksMut<Amount> {
-        self.values.chunks_mut(self.dims.1)
-    }
-
+    /// Mutably references a column of the Lobe's values.
     pub fn value_column_mut(&mut self, which: usize) -> &mut [Amount] {
         &mut self.values[which * self.dims.1..(which + 1) * self.dims.1]
     }
 
+    /// Iterates on the columns of the Lobe's values.
+    pub fn values_chunked(&self) -> Chunks<Amount> {
+        self.values.chunks(self.dims.1)
+    }
+
+    /// Mutably iterates on the columns of the Lobe's values.
+    pub fn values_chunked_mut(&mut self) -> ChunksMut<Amount> {
+        self.values.chunks_mut(self.dims.1)
+    }
+
+    /// References a column of the Lobe's firing strengths.
     pub fn strength_column_ref(&self, which: usize) -> &[Amount] {
         &self.strengths[which * self.dims.1..(which + 1) * self.dims.1]
     }
 
+    /// Mutably references a column of the Lobe's firing strengths.
     pub fn strength_column_mut(&mut self, which: usize) -> &mut [Amount] {
         &mut self.strengths[which * self.dims.1..(which + 1) * self.dims.1]
     }
 
+    /// Iterates on the columns of the Lobe's firing strengths.
     pub fn strengths_chunked(&self) -> Chunks<Amount> {
         self.strengths.chunks(self.dims.1)
     }
 
+    /// References a column of the Lobe's firing thresholds.
     pub fn threshold_column_ref(&self, which: usize) -> &[Amount] {
         &self.thresholds[which * self.dims.1..(which + 1) * self.dims.1]
     }
 
+    /// Mutably references a column of the Lobe's firing thresholds.
     pub fn threshold_column_mut(&mut self, which: usize) -> &mut [Amount] {
         &mut self.thresholds[which * self.dims.1..(which + 1) * self.dims.1]
     }
 
+    /// Iterates on the columns of the Lobe's firing thresholds.
     pub fn thresholds_chunked(&self) -> Chunks<Amount> {
         self.thresholds.chunks(self.dims.1)
     }
 
+    /// References a column of the Lobe's forward weights.
     pub fn weight_column_ref(&self, which: usize) -> &[Amount] {
         &self.weights[which * 3 * self.dims.1..(which + 1) * 3 * self.dims.1]
     }
 
+    /// Mutably references a column of the Lobe's forward weights.
     pub fn weight_column_mut(&mut self, which: usize) -> &mut [Amount] {
         &mut self.weights[which * 3 * self.dims.1..(which + 1) * 3 * self.dims.1]
     }
 
+    /// Iterates on the columns of the Lobe's forward weights.
     pub fn weight_column_chunks(&self, which: usize) -> std::slice::Chunks<Amount> {
         self.weight_column_ref(which).chunks(3)
+    }
+
+    /// Returns mutable slices into all parameters, useful for training.
+    pub fn all_parameters_slices<'a>(&'a mut self) -> Vec<&'a mut [Amount]> {
+        vec![
+            &mut self.weights,
+            &mut self.thresholds,
+            &mut self.strengths,
+            slice::from_mut(&mut self.falloff),
+        ]
+    }
+
+    /// Returns owned vector copies of all parameters, useful for training.
+    pub fn all_parameters_owned(&self) -> Vec<Amount> {
+        let mut vec = vec![];
+
+        vec.extend(&self.thresholds);
+        vec.extend(&self.weights);
+        vec.extend(&self.strengths);
+        vec.push(self.falloff);
+
+        vec
+    }
+
+    /// Returns the dimensions of this Lobe, useful for training.
+    pub fn get_dims(&self) -> (usize, usize) {
+        self.dims
+    }
+
+    /// Creates a new Lobe from a list of parameters, loaded in the same order
+    /// they would be concatenated in [all_parameters_owned].
+    pub fn from_parameters(dims: (usize, usize), params: &[Amount]) -> Self {
+        let area = dims.0 * dims.1;
+
+        debug_assert!(params.len() == area * 5 + 1);
+
+        Self {
+            dims,
+            thresholds: params[0..area].to_vec(),
+            weights: params[area..area * 4].to_vec(),
+            strengths: params[area * 4..area * 5].to_vec(),
+            falloff: *params.last().unwrap(),
+            values: vec![Amount::from_num(0); area + dims.0],
+        }
     }
 }
 
